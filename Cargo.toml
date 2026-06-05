@@ -1,0 +1,6 @@
+[package]
+name = "ternary-tempo"
+version = "0.1.0"
+edition = "2021"
+description = "Tempo and beat detection for ternary rhythms — BPM estimation, syncopation, swing timing, phase-locking"
+license = "MIT"
