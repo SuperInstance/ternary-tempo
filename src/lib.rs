@@ -87,12 +87,16 @@ pub enum RhythmStyle { FourOnFloor, Syncopated, Waltz, Swing }
 /// The 8-ball spot — where the rhythm is perfectly balanced.
 /// The equilibrium point in the ternary rhythm where energy is minimal.
 pub fn find_equilibrium_spot(pattern: &[i8]) -> usize {
-    let mut best = 0; let mut best_energy = f64::MAX;
+    let mut best = 0; let mut best_score = f64::MAX;
     for i in 0..pattern.len() {
-        let window = 4.min(i).min(pattern.len() - i);
-        let energy: f64 = (i-window..=i+window).filter(|&j| j < pattern.len())
-            .map(|j| (pattern[j] as f64).powi(2)).sum();
-        if energy < best_energy { best_energy = energy; best = i; }
+        let half_w = 2.min(i).min(pattern.len() - 1 - i);
+        let energy: f64 = (i as i32 - half_w as i32..=i as i32 + half_w as i32)
+            .filter(|&j| j >= 0 && (j as usize) < pattern.len())
+            .map(|j| (pattern[j as usize] as f64).powi(2)).sum();
+        // Penalize non-zero center values to prefer calm spots
+        let center_penalty = (pattern[i] as f64).powi(2) * 10.0;
+        let score = energy + center_penalty;
+        if score < best_score { best_score = score; best = i; }
     }
     best
 }
