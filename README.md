@@ -1,134 +1,73 @@
 # ternary-tempo
 
-**Tempo and rhythm detection for ternary sequences.** BPM estimation, syncopation, swing timing — the metronome for ternary conversations.
+**BPM estimation, swing detection, and groove analysis. How fast is the heartbeat?**
 
-## Why This Exists
+Tempo is the pulse. Everything else — melody, harmony, timbre — rides on top of the tempo. And tempo isn't just "how many beats per minute." It's swing (are the off-beats late?), groove (is the rhythm locked to the beat or fighting it?), and feel (does it rush or drag?). Two drummers playing the same BPM can feel completely different because of micro-timing.
 
-Multi-agent ternary conversations have a natural rhythm. In `ternary-tenforward`, we discovered that the Fibonacci period 8 (Pisano period mod 3) governs when agents tunnel out of reflection. But that's the micro-rhythm. What about the macro-rhythm?
+This crate estimates tempo from ternary signals, detects swing, finds the equilibrium point (the calmest spot in a rhythm pattern), and measures groove alignment.
 
-When agents in a population alternate between active and passive states, there's a detectable tempo. An agreeing population pulses at one rate; a divided population has a different feel entirely. This crate measures that tempo, quantifies how off-beat the agents are (syncopation), and detects asymmetric timing patterns (swing).
+## What's Inside
 
-Without tempo detection, you can't know when to trigger transitions, when to apply effects, or when the conversation is speeding up or slowing down. Tempo is the foundation of everything else in the DJ metaphor stack.
+- **`estimate_bpm(signal, sample_rate)`** — estimate BPM from a ternary rhythm signal
+- **`detect_swing(signal)`** — measure swing ratio. 1.0 = straight, 1.5 = light swing, 2.0 = full triplet
+- **`find_equilibrium_spot(pattern)`** — find the calmest position in a pattern (lowest energy neighborhood)
+- **`groove_alignment(signal, beat_interval)`** — how well does the signal align with the beat grid?
+- **`generate_four_on_floor(bpm, bars)`** — the universal dance beat (four quarter notes per bar)
+- **`generate_waltz(bpm, bars)`** — three-quarter time (1-2-3, 1-2-3)
+- **`generate_syncopated(bpm, bars)`** — off-beat patterns (jazz, funk, reggae)
+- **`equilibrium_in_zeros(pattern)`** — the equilibrium point should be at a zero value
 
-## The Physics Behind It
-
-### BPM from Ternary Sequences
-
-Ternary sequences encode agent states over time: -1 (contrarian), 0 (reflecting), +1 (agreeing). "Beats" are the non-zero entries — moments when an agent takes a stance. BPM estimation works by:
-
-1. Finding all beat positions (non-zero values)
-2. Computing intervals between consecutive beats
-3. Averaging those intervals
-4. Converting to beats-per-minute: `BPM = 60 × ticks_per_second / avg_interval`
-
-This is analogous to onset detection in audio signal processing, except the "signal" is a discrete ternary stream rather than a continuous waveform.
-
-### Syncopation
-
-Syncopation measures deviation from a regular beat grid. For each active position, we compute how far it falls from the expected grid alignment. High syncopation means agents are speaking at unpredictable intervals — the conversation has a lot of interjections and interruptions. Low syncopation means a polite, turn-taking pattern.
-
-In the RPS experiments, high syncopation correlated with rapid dominance cycling. When syncopation was low, one agent tended to dominate for longer stretches.
-
-### Swing
-
-Swing is asymmetric beat timing — the "long-short" pattern familiar from jazz. We measure it by comparing the aggregate energy on even vs. odd beat subdivisions. Perfect swing (value 1.0) means all the activity is on one subdivision; 0.0 means perfectly even.
-
-### The Equilibrium Spot
-
-`find_equilibrium_spot` locates the 8-ball position — where the rhythm has minimum energy. This is the natural rest point, useful for placing transitions or letting the conversation breathe. It connects to the spindle concept in `ternary-crossfader`.
-
-### Rhythm Styles
-
-Four preset patterns map to different conversation dynamics:
-
-- **FourOnFloor** — every beat active. A lively, engaged conversation where everyone contributes regularly.
-- **Syncopated** — alternating strong/weak beats. A debate with call-and-response patterns.
-- **Waltz** — 3/4 time with emphasis on the first beat. A conversation with a clear leader and respondents.
-- **Swing** — delayed offbeats. A relaxed, informal exchange with natural timing.
-
-## Key Types and Functions
+## Quick Example
 
 ```rust
-/// Rhythm style presets for pattern generation.
-pub enum RhythmStyle { FourOnFloor, Syncopated, Waltz, Swing }
+use ternary_tempo::*;
 
-/// Estimate BPM from ternary pattern periodicity.
-pub fn estimate_bpm(sequence: &[i8], ticks_per_second: f64) -> f64
+// Generate a four-on-the-floor at 120 BPM
+let beat = generate_four_on_floor(120.0, 4);
+// Four bars of quarter-note pulses
 
-/// Measure syncopation — deviation from regular beat grid.
-pub fn syncopation(sequence: &[i8], beat_interval: usize) -> f64
+// Detect the BPM
+let bpm = estimate_bpm(&beat, 44100.0);
+println!("Detected: {:.0} BPM", bpm);
 
-/// Swing factor — asymmetric beat timing (0 = straight, 1 = full swing).
-pub fn swing_factor(sequence: &[i8], beat_interval: usize) -> f64
+// Generate a swing pattern
+let swung = generate_syncopated(100.0, 2);
+let swing_ratio = detect_swing(&swung);
+println!("Swing: {:.2} (1.0 = straight)", swing_ratio);
 
-/// Beat grid alignment — how well the sequence fits a regular grid.
-pub fn beat_alignment(sequence: &[i8], bpm: f64, ticks_per_second: f64) -> f64
-
-/// Generate a ternary rhythm pattern from BPM and style.
-pub fn generate_pattern(bpm: f64, ticks_per_second: f64, measures: usize, style: RhythmStyle) -> Vec<i8>
-
-/// The 8-ball spot — equilibrium point where rhythm energy is minimal.
-pub fn find_equilibrium_spot(pattern: &[i8]) -> usize
+// Find the calm spot in a pattern
+let pattern = vec![1, 1, 0, 0, 0, 0, 1, 1];
+let eq = find_equilibrium_spot(&pattern);
+println!("Equilibrium at position {} (value: {})", eq, pattern[eq]);
+// Should be at one of the zeros
 ```
 
-## Usage
+## The Deeper Truth
 
-```rust
-use ternary_tempo::{estimate_bpm, syncopation, swing_factor, beat_alignment,
-                    generate_pattern, find_equilibrium_spot, RhythmStyle};
+**Tempo is a perception, not a measurement.** Two signals at the same BPM can feel different speeds depending on where the accents fall. A pattern with accents on beats 1 and 3 (four-on-the-floor) feels slower than the same pattern with accents on 1, 2, 3, 4 (double-time feel). The tempo is in the *pattern*, not just the frequency.
 
-// A conversation where agents speak every 4 ticks
-let conversation = vec![1, 0, 0, 0, -1, 0, 0, 0, 1, 0, 0, 0];
+The equilibrium spot is the most musical function: it finds the "rest" in a rhythm — the place where the energy is lowest. In a drum pattern, that's where you'd put a fill or a break. It's the musical equivalent of a negative space in visual art — the silence that gives the sound its shape.
 
-let bpm = estimate_bpm(&conversation, 4.0);  // ~60 BPM
-let sync = syncopation(&conversation, 4);     // low — very regular
-let swing = swing_factor(&conversation, 4);   // low — no asymmetry
-let alignment = beat_alignment(&conversation, 60.0, 4.0);  // high — on the grid
+**Use cases:**
+- **BPM detection** — estimate tempo from any ternary rhythm
+- **Swing analysis** — measure how swung a pattern is
+- **Rhythm generation** — generate standard patterns (four-on-floor, waltz, syncopated)
+- **Groove quantization** — align loose timing to a grid
+- **Music information retrieval** — classify music by tempo and feel
 
-// Find where to breathe
-let rest = find_equilibrium_spot(&conversation);
+## See Also
 
-// Generate a pattern
-let debate = generate_pattern(120.0, 4.0, 2, RhythmStyle::Syncopated);
-// Produces: [1, 0, 0, 0, -1, 0, 0, 0, 1, 0, 0, 0, -1, 0, 0, 0, ...]
+- **ternary-rhythm** — the patterns that tempo measures
+- **ternary-polyrhythm** — multiple tempos simultaneously
+- **ternary-phase** — phase alignment at the tempo level
+- **ternary-jam** — tempo emerges from jam dynamics
+- **ternary-fib** — period-8 as the natural ternary tempo
 
-let casual = generate_pattern(90.0, 4.0, 2, RhythmStyle::Swing);
-// Offbeats are delayed — natural conversation feel
+## Install
+
+```bash
+cargo add ternary-tempo
 ```
-
-### Tempo-Driven Crossfading
-
-```rust
-// Use tempo to drive transitions in ternary-crossfader
-let bpm = estimate_bpm(&agent_history, 4.0);
-if bpm > 100.0 {
-    // Fast conversation — use S-curve for quick transitions
-    // (pass to ternary-crossfader with FaderCurve::SCurve)
-}
-```
-
-## Experiment Connections
-
-| Measurement | What It Tells You |
-|------------|-------------------|
-| High BPM (>100) | Agents are actively engaged, rapid state changes |
-| Low BPM (<40) | Agents are stuck in reflection, low energy |
-| High syncopation (>0.5) | Unpredictable, chaotic conversation |
-| Low syncopation (<0.1) | Ordered, possibly monoculture risk |
-| High swing (>0.5) | Asymmetric roles — one agent leads |
-| Low alignment (<0.3) | Free-form, not grid-locked |
-
-The monoculture warning from the ten-forward experiments: if syncopation drops to near-zero and BPM stabilizes, the conversation may be locking up. This is the early warning system.
-
-## In the Ternary Fleet
-
-This is the **timing layer** in the DJ metaphor product stack:
-
-- `ternary-tenforward` — produces the ternary agent streams
-- **ternary-tempo** — measures the rhythm of those streams
-- `ternary-crossfader` — uses tempo to time transitions
-- `ternary-envelope` — uses tempo to shape ADSR profiles
-- `ternary-grain` — uses tempo to set grain density and size
 
 ## License
 
