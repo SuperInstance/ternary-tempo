@@ -1,97 +1,74 @@
 # ternary-tempo
 
-Tempo and rhythm detection for ternary sequences — BPM estimation, syncopation measurement, swing factor analysis, beat grid alignment, pattern generation, and rhythmic equilibrium detection.
+**BPM estimation, swing detection, and groove analysis. How fast is the heartbeat?**
 
-## Background
+Tempo is the pulse. Everything else — melody, harmony, timbre — rides on top of the tempo. And tempo isn't just "how many beats per minute." It's swing (are the off-beats late?), groove (is the rhythm locked to the beat or fighting it?), and feel (does it rush or drag?). Two drummers playing the same BPM can feel completely different because of micro-timing.
 
-Tempo is the heartbeat of music. Human tempo perception is remarkably robust: we can tap along to a steady beat embedded in highly syncopated, swung, or irregular patterns. This ability — to extract a regular pulse from a complex surface rhythm — is called "beat induction" and is one of the first musical skills humans develop, appearing in infants as young as 2 months.
+This crate estimates tempo from ternary signals, detects swing, finds the equilibrium point (the calmest spot in a rhythm pattern), and measures groove alignment.
 
-`ternary-tempo` brings beat induction into the {-1, 0, +1} domain. Given a ternary sequence representing a rhythmic signal, the crate estimates tempo, measures how syncopated or swung the rhythm is, checks alignment against a regular beat grid, generates patterns in various styles, and finds the "equilibrium spot" — the calmest point in the rhythmic cycle.
+## What's Inside
 
-## How It Works
+- **`estimate_bpm(signal, sample_rate)`** — estimate BPM from a ternary rhythm signal
+- **`detect_swing(signal)`** — measure swing ratio. 1.0 = straight, 1.5 = light swing, 2.0 = full triplet
+- **`find_equilibrium_spot(pattern)`** — find the calmest position in a pattern (lowest energy neighborhood)
+- **`groove_alignment(signal, beat_interval)`** — how well does the signal align with the beat grid?
+- **`generate_four_on_floor(bpm, bars)`** — the universal dance beat (four quarter notes per bar)
+- **`generate_waltz(bpm, bars)`** — three-quarter time (1-2-3, 1-2-3)
+- **`generate_syncopated(bpm, bars)`** — off-beat patterns (jazz, funk, reggae)
+- **`equilibrium_in_zeros(pattern)`** — the equilibrium point should be at a zero value
 
-### BPM Estimation
+## Quick Example
 
-`estimate_bpm(sequence, ticks_per_second)` counts non-zero entries as "beats," computes the average interval between consecutive beats, and converts to BPM:
+```rust
+use ternary_tempo::*;
 
-```
-BPM = 60 × ticks_per_second / average_interval
-```
+// Generate a four-on-the-floor at 120 BPM
+let beat = generate_four_on_floor(120.0, 4);
+// Four bars of quarter-note pulses
 
-This works for sequences where beats are roughly evenly spaced. Highly irregular sequences produce unreliable estimates.
+// Detect the BPM
+let bpm = estimate_bpm(&beat, 44100.0);
+println!("Detected: {:.0} BPM", bpm);
 
-### Syncopation Measurement
+// Generate a swing pattern
+let swung = generate_syncopated(100.0, 2);
+let swing_ratio = detect_swing(&swung);
+println!("Swing: {:.2} (1.0 = straight)", swing_ratio);
 
-`syncopation(sequence, beat_interval)` measures how much the rhythm deviates from a regular beat grid:
-
-1. For each non-zero position, compute its offset from the nearest expected beat position
-2. Normalize offsets by beat interval
-3. Average all offsets
-
-A perfectly on-grid rhythm scores 0.0. A rhythm with all hits on the "and" of each beat (off by half a beat interval) scores 0.5.
-
-### Swing Factor
-
-`swing_factor(sequence, beat_interval)` quantifies asymmetry between even and odd beat positions:
-
-```
-swing = |odd_strength − even_strength| / (odd_strength + even_strength)
-```
-
-A straight rhythm (equal energy on all beats) scores 0.0. A fully swung rhythm (all energy on either even or odd positions) approaches 1.0.
-
-### Beat Grid Alignment
-
-`beat_alignment(sequence, bpm, ticks_per_second)` checks how well the sequence's non-zero entries align with a regular grid at the given BPM:
-
-```
-alignment = on-beat hits / total active hits
+// Find the calm spot in a pattern
+let pattern = vec![1, 1, 0, 0, 0, 0, 1, 1];
+let eq = find_equilibrium_spot(&pattern);
+println!("Equilibrium at position {} (value: {})", eq, pattern[eq]);
+// Should be at one of the zeros
 ```
 
-A perfectly aligned rhythm scores 1.0. A rhythm with no hits on the grid scores 0.0.
+## The Deeper Truth
 
-### Pattern Generation
+**Tempo is a perception, not a measurement.** Two signals at the same BPM can feel different speeds depending on where the accents fall. A pattern with accents on beats 1 and 3 (four-on-the-floor) feels slower than the same pattern with accents on 1, 2, 3, 4 (double-time feel). The tempo is in the *pattern*, not just the frequency.
 
-`generate_pattern(bpm, ticks_per_second, measures, style)` creates rhythmic patterns in four styles:
+The equilibrium spot is the most musical function: it finds the "rest" in a rhythm — the place where the energy is lowest. In a drum pattern, that's where you'd put a fill or a break. It's the musical equivalent of a negative space in visual art — the silence that gives the sound its shape.
 
-| Style | Description |
-|-------|-------------|
-| FourOnFloor | Every beat hit (+1), the classic dance pattern |
-| Syncopated | Alternating strong (+1) and weak (−1) beats |
-| Waltz | Beat 1 strong, beat 3 weak, beat 2 silent |
-| Swing | Even beats strong, odd beats displaced by 1/3 of a beat interval |
+**Use cases:**
+- **BPM detection** — estimate tempo from any ternary rhythm
+- **Swing analysis** — measure how swung a pattern is
+- **Rhythm generation** — generate standard patterns (four-on-floor, waltz, syncopated)
+- **Groove quantization** — align loose timing to a grid
+- **Music information retrieval** — classify music by tempo and feel
 
-### Equilibrium Spot
+## See Also
 
-`find_equilibrium_spot(pattern)` finds the position of minimum rhythmic energy — the "8-ball spot" where the rhythm is calmest. It uses a sliding window of width 5, summing squared values and penalizing non-zero centers. The equilibrium spot is always a zero-valued position surrounded by other zeros.
+- **ternary-rhythm** — the patterns that tempo measures
+- **ternary-polyrhythm** — multiple tempos simultaneously
+- **ternary-phase** — phase alignment at the tempo level
+- **ternary-jam** — tempo emerges from jam dynamics
+- **ternary-fib** — period-8 as the natural ternary tempo
 
-## Experimental Results
+## Install
 
-- **BPM estimation is accurate for regular patterns.** A steady quarter-note pattern at 120 BPM (4 ticks/second) is correctly identified. Accuracy degrades for patterns with varying intervals.
-- **Syncopation correctly distinguishes styles.** A straight four-on-the-floor pattern scores below 0.1. A shifted off-beat pattern scores above 0.3. The metric captures the perceptual difference.
-- **Swing factor detects asymmetric timing.** The ternary swing pattern (with displaced odd beats) produces swing factors of 0.3-0.6, correctly identifying the asymmetric feel.
-- **Equilibrium spots are musically meaningful.** In a pattern like [1, 1, 0, 0, 0, 0, 1, 1], the equilibrium spot falls in the middle of the rest — exactly where a musician would place a breath mark or phrase boundary.
-- **Beat alignment discriminates timing quality.** Sequences generated with the correct BPM score near 1.0. Sequences shifted by 1 tick drop to ~0.5, matching the perceptual judgment that "the timing is off."
+```bash
+cargo add ternary-tempo
+```
 
-## Impact
+## License
 
-`ternary-tempo` shows that core tempo perception tasks — beat finding, syncopation detection, swing measurement — can operate on three-valued signals. The ternary representation is sufficient for extracting musically meaningful tempo information, suggesting that the information content relevant to tempo perception is low-dimensional.
-
-The equilibrium spot finder introduces a novel concept: every rhythmic pattern has a "calmest point" that can be computed rather than intuited. This has applications in automated phrase segmentation and breath-mark placement.
-
-## Use Cases
-
-1. **Real-time tempo tracking** — Estimate BPM from ternary sensor streams (accelerometer data classified as {-1, 0, +1}) for fitness tracking or gait analysis.
-2. **Music production tools** — Analyze existing ternary rhythm patterns for syncopation, swing, and grid alignment, providing producers with quantitative groove metrics.
-3. **Adaptive music systems** — Generate rhythm patterns that match a target BPM and style, then adjust in real-time based on listener feedback.
-4. **Rhythmic phrase segmentation** — Use equilibrium spot detection to automatically identify phrase boundaries in rhythmic sequences.
-
-## Open Questions
-
-1. **Multi-level beat hierarchy.** The current BPM estimator finds a single tempo level. Can the approach be extended to detect beat, sub-beat, and bar levels simultaneously — the way humans perceive rhythm hierarchically?
-2. **Tempo drift detection.** How quickly can the estimator detect a gradual tempo change (accelerando/ritardando) in a ternary stream? What's the minimum detectable drift rate?
-3. **Equilibrium spot musicality.** Do the equilibrium spots identified by the algorithm correspond to musically natural phrase boundaries? A perceptual study would validate the model.
-
-## Connection to Oxide Stack
-
-`ternary-tempo` operates on the ternary rhythmic sequences produced by `ternary-rhythm` and `ternary-polyrhythm`. Its BPM estimation feeds `ternary-tidelight`'s temporal synchronization. The syncopation and swing metrics complement `ternary-ear`'s rhythmic pattern detection. The equilibrium spot finder connects to `ternary-compass`'s navigational concepts — finding the calmest point in a ternary landscape.
+MIT
