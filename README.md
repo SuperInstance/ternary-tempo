@@ -1,73 +1,99 @@
-# ternary-tempo
+# Ternary Tempo — Rhythm Detection and Generation for Ternary Sequences
 
-**BPM estimation, swing detection, and groove analysis. How fast is the heartbeat?**
+**Ternary Tempo** analyzes rhythmic patterns in ternary-valued sequences {-1, 0, +1}. It estimates BPM from beat periodicity, measures syncopation and swing, computes beat-grid alignment, and generates new patterns in various styles (four-on-floor, waltz, syncopated, swing). Designed for ternary signal analysis where periodicity matters.
 
-Tempo is the pulse. Everything else — melody, harmony, timbre — rides on top of the tempo. And tempo isn't just "how many beats per minute." It's swing (are the off-beats late?), groove (is the rhythm locked to the beat or fighting it?), and feel (does it rush or drag?). Two drummers playing the same BPM can feel completely different because of micro-timing.
+## Why It Matters
 
-This crate estimates tempo from ternary signals, detects swing, finds the equilibrium point (the calmest spot in a rhythm pattern), and measures groove alignment.
+Periodic patterns appear everywhere in ternary systems: agent state oscillations, GPU utilization cycles, consensus round timing. Detecting the "tempo" of these patterns — how fast they cycle, how well they align to a regular grid, whether they swing — provides diagnostic insight. A fleet oscillating at high frequency between +1 and -1 (high BPM, low syncopation) is making rapid but predictable decisions. A fleet with high syncopation is making irregular decisions, potentially indicating instability. The rhythm generation capability also enables constructing scheduled ternary patterns (like a score for fleet operations).
 
-## What's Inside
+## How It Works
 
-- **`estimate_bpm(signal, sample_rate)`** — estimate BPM from a ternary rhythm signal
-- **`detect_swing(signal)`** — measure swing ratio. 1.0 = straight, 1.5 = light swing, 2.0 = full triplet
-- **`find_equilibrium_spot(pattern)`** — find the calmest position in a pattern (lowest energy neighborhood)
-- **`groove_alignment(signal, beat_interval)`** — how well does the signal align with the beat grid?
-- **`generate_four_on_floor(bpm, bars)`** — the universal dance beat (four quarter notes per bar)
-- **`generate_waltz(bpm, bars)`** — three-quarter time (1-2-3, 1-2-3)
-- **`generate_syncopated(bpm, bars)`** — off-beat patterns (jazz, funk, reggae)
-- **`equilibrium_in_zeros(pattern)`** — the equilibrium point should be at a zero value
+### BPM Estimation
 
-## Quick Example
+Finds non-zero entries (beats) in the sequence and computes the average inter-beat interval:
 
-```rust
-use ternary_tempo::*;
-
-// Generate a four-on-the-floor at 120 BPM
-let beat = generate_four_on_floor(120.0, 4);
-// Four bars of quarter-note pulses
-
-// Detect the BPM
-let bpm = estimate_bpm(&beat, 44100.0);
-println!("Detected: {:.0} BPM", bpm);
-
-// Generate a swing pattern
-let swung = generate_syncopated(100.0, 2);
-let swing_ratio = detect_swing(&swung);
-println!("Swing: {:.2} (1.0 = straight)", swing_ratio);
-
-// Find the calm spot in a pattern
-let pattern = vec![1, 1, 0, 0, 0, 0, 1, 1];
-let eq = find_equilibrium_spot(&pattern);
-println!("Equilibrium at position {} (value: {})", eq, pattern[eq]);
-// Should be at one of the zeros
+```
+BPM = 60 × ticks_per_second / avg_interval
 ```
 
-## The Deeper Truth
+O(n) for n sequence elements. Returns 0 if fewer than 2 beats are found.
 
-**Tempo is a perception, not a measurement.** Two signals at the same BPM can feel different speeds depending on where the accents fall. A pattern with accents on beats 1 and 3 (four-on-the-floor) feels slower than the same pattern with accents on 1, 2, 3, 4 (double-time feel). The tempo is in the *pattern*, not just the frequency.
+### Syncopation
 
-The equilibrium spot is the most musical function: it finds the "rest" in a rhythm — the place where the energy is lowest. In a drum pattern, that's where you'd put a fill or a break. It's the musical equivalent of a negative space in visual art — the silence that gives the sound its shape.
+Measures deviation from a regular beat grid. For each beat, computes its offset from the nearest expected position (given the beat interval), normalized by the interval:
 
-**Use cases:**
-- **BPM detection** — estimate tempo from any ternary rhythm
-- **Swing analysis** — measure how swung a pattern is
-- **Rhythm generation** — generate standard patterns (four-on-floor, waltz, syncopated)
-- **Groove quantization** — align loose timing to a grid
-- **Music information retrieval** — classify music by tempo and feel
+```
+syncopation = mean(|offset_i| / interval) for all beats
+```
 
-## See Also
+Syncopation = 0 means all beats fall on the grid; syncopation = 0.5 means beats are typically halfway between grid positions. O(n).
 
-- **ternary-rhythm** — the patterns that tempo measures
-- **ternary-polyrhythm** — multiple tempos simultaneously
-- **ternary-phase** — phase alignment at the tempo level
-- **ternary-jam** — tempo emerges from jam dynamics
-- **ternary-fib** — period-8 as the natural ternary tempo
+### Swing Factor
 
-## Install
+Compares the strength of even vs. odd beat positions:
+
+```
+swing = |odd_strength - even_strength| / (odd_strength + even_strength)
+```
+
+Swing = 0 is perfectly straight (equal weight); swing → 1 is full swing (lopsided). O(n).
+
+### Beat Alignment
+
+Fraction of non-zero entries that fall on expected beat positions:
+
+```
+alignment = count(on_beat) / count(active)
+```
+
+O(n). High alignment means the pattern is regular; low alignment means it's irregular.
+
+### Pattern Generation
+
+`generate_pattern(bpm, tps, measures, style)` creates a ternary rhythm:
+
+- **Four-on-floor**: +1 on every beat, 0 elsewhere
+- **Syncopated**: Alternating +1 and -1 on beats
+- **Waltz**: +1 on beat 1, -1 on beat 3, 0 on beat 2
+- **Swing**: +1 on even beats, delayed +1 on odd beats
+
+O(beats × measures) generation.
+
+## Quick Start
+
+```rust
+use ternary_tempo::{estimate_bpm, syncopation, RhythmStyle, generate_pattern};
+
+let pattern = generate_pattern(120.0, 100.0, 4, RhythmStyle::FourOnFloor);
+let bpm = estimate_bpm(&pattern, 100.0);
+let sync = syncopation(&pattern, 25);
+println!("BPM: {:.0}, Syncopation: {:.2}", bpm, sync);
+```
 
 ```bash
 cargo add ternary-tempo
 ```
+
+## API
+
+| Type / Function | Description |
+|---|---|
+| `estimate_bpm(seq, ticks_per_sec)` | BPM from inter-beat intervals |
+| `syncopation(seq, beat_interval)` | Grid deviation (0 = on-grid) |
+| `swing_factor(seq, beat_interval)` | Asymmetry metric |
+| `beat_alignment(seq, bpm, tps)` | Fraction of beats on grid |
+| `generate_pattern(bpm, tps, measures, style)` | Synthesize a pattern |
+| `RhythmStyle` | FourOnFloor, Syncopated, Waltz, Swing |
+
+## Architecture Notes
+
+Tempo analysis reveals the operational rhythm of **SuperInstance** fleets. Fast, regular tempos (high BPM, low syncopation) indicate healthy fleet operations; irregular tempos indicate instability. The γ + η = C conservation manifests in the regularity: regular patterns have high γ (predictable growth) and low η (low entropy), while irregular patterns have high η. See [Architecture](https://github.com/SuperInstance/SuperInstance/blob/main/ARCHITECTURE.md).
+
+## References
+
+- Temperley, David. *The Cognition of Basic Musical Structures*, MIT Press, 2001.
+| Krumhansl, Carol. *Cognitive Foundations of Musical Pitch*, Oxford UP, 1990.
+| Toussaint, Godfried. *The Geometry of Musical Rhythm*, CRC Press, 2013.
 
 ## License
 
